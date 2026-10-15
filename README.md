@@ -1,0 +1,84 @@
+<p align="center">
+  <img src="header.png" alt="Abraxas Labs - pfsense-pppoe-cron" width="100%">
+</p>
+
+<p align="center">
+  <a href="https://abraxaslabs.tech"><strong>abraxaslabs.tech</strong></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/abraxas">github.com/abraxas</a>
+  &nbsp;·&nbsp;
+  <a href="https://x.com/abraxas_null">@abraxas_null</a>
+  &nbsp;·&nbsp;
+  <a href="mailto:abraxas.null@proton.me">abraxas.null@proton.me</a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/abraxas/pfsense-pppoe-cron">pfsense-pppoe-cron</a>
+</p>
+
+# pfsense-pppoe-cron
+
+**Class:** RCE
+**Reach:** Remote
+
+**pfSense CE** `2.9.0-DEVELOPMENT` (`9363ac5`) - [pfsense.org](https://www.pfsense.org)
+
+handle_pppoe_reset uses hidden ptpid without is_numericint. Custom hour/minute validation is AND where it needed OR. configure_cron writes fields raw. Sibling of SA-26_06, not proxyuser.
+
+| | |
+|---|---|
+| ID | no CVE yet |
+| Class | **RCE** |
+| Reach | **Remote** (authenticated WebGUI unless noted) |
+| CWE | [CWE-78](https://cwe.mitre.org/data/definitions/78.html) |
+| CVSS | **High: 8.8** `CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H` |
+| Product | [pfSense CE](https://github.com/pfsense/pfsense) |
+| Affected | **2.9.0-DEVELOPMENT** (`9363ac5b8651a1c7a333180425ce7719070f95f9`) |
+| Auth | WebGUI session with `page-interfaces-ppps-edit` |
+| License | [GNU Affero GPL v3.0](LICENSE) |
+| Lab | `127.0.0.1` only |
+
+I pinned public master [9363ac5](https://github.com/pfsense/pfsense/commit/9363ac5b8651a1c7a333180425ce7719070f95f9). The lab is a PHP gadget of the pinned sink, loopback HTTP on `127.0.0.1:18970`.
+
+Series write-up: https://abraxaslabs.tech/research/pfsense-ce-leftovers
+
+## What an attacker can do
+
+| Method | Sink | Privilege |
+|---|---|---|
+| POST interfaces_ppps_edit.php ptpid / pppoe_resethour | handle_pppoe_reset then configure_cron raw fields | **Integrity:** Lab-proven: newline in ptpid added an extra root crontab line; stub cron executed it. |
+| same leftover | same sink | **Recon:** Inferred: extra cron as root. |
+| same leftover | same sink | **Availability:** Inferred: extra periodic commands. |
+
+**Requires:** `page-interfaces-ppps-edit`. CSRF-magic on POST unless noted. WebGUI PHP-FPM is root.
+
+**Requires:** `page-interfaces-ppps-edit`. CSRF-magic on POST unless noted. WebGUI PHP-FPM is root. CSRF-magic on POST unless noted. WebGUI PHP-FPM is root.
+
+## Adjacent surface that stays closed
+
+SA-26_06 is System Proxy crontab. #16128 is PPP client sanitize.
+
+No Diagnostics: Command unless that page is also granted.
+
+## Lab
+
+```bash
+cd lab
+./run.sh
+```
+
+Loopback `127.0.0.1:18970`. Compose project `pfsense-pppoe-cron`. Witness `PFSENSE-PPPOE-CRON-WITNESS`. Loopback only: `127.0.0.1:18970`. Compose project `pfsense-pppoe-cron`. Witness `PFSENSE-PPPOE-CRON-WITNESS`. PHP gadget of the pinned lines. Stack tears down after the run.
+
+Last line:
+
+```
+SUCCESS PFSENSE-PPPOE-CRON control-one-line=yes trigger-extra-root-line=yes stub-cron-ran-extra=yes PFSENSE-PPPOE-CRON-WITNESS
+```
+
+## Fix
+
+is_numericint ptpid. Reject CR/LF in hour/minute. Quote crontab fields.
+
+## References
+
+- [github.com/pfsense/pfsense](https://github.com/pfsense/pfsense) `9363ac5b8651a1c7a333180425ce7719070f95f9`
+- [CWE-78](https://cwe.mitre.org/data/definitions/78.html)
+- Series: https://abraxaslabs.tech/research/pfsense-ce-leftovers
